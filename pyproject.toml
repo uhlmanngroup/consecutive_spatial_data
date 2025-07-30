@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "consecutive_spatial_data"
+version = "0.1.0"
+description = "Spatial data processing and alignment"
+
+dependencies = [
+    "typer",
+    "InquirerPy",
+    "spatialdata",
+    "geopandas",
+    "numpy",
+    "tifffile",
+    "dask",
+    "dask-image",
+    "multiscale-spatial-image", 
+    "spatial-image",
+    "tqdm",
+    "xarray",
+    "anndata",
+    "shapely",
+    "opencv-python",
+    "pyyaml",
+    "imagecodecs",
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+consecutive_spatial_data = "consecutive_spatial_data.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["consecutive_spatial_data*"]
