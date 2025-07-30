@@ -33,6 +33,10 @@ We recommend running `consecutive_spatial_data` inside the Valis Docker containe
 ### Example Usage
 
 ```bash
+git clone github.com/callum-jpg/consecutive_spatial_data
+cd consecutive_spatial_data
+pip install -e .
+
 consecutive_spatial_data register config.toml
 ```
 
