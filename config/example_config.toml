@@ -1,0 +1,47 @@
+# Alignment stores the overall configuration for the registration task
+[alignment]
+# Path to save the aligned SpatialData to
+save_path = "aligned_spatial_data"
+# alignment_kwargs are passed to the registration backend. 
+# For Valis, here are some considerations:
+# max_processed_image_dim_px is useful for aligning consecutive slides. A lower value (eg. 1000) 
+# can allow better initial matching of similar (ie. not same) sections.
+# If aligning matching sections (ie. DAPI + H&E of the same cells), a higher max_processed_image_dim_px
+# can be better (eg. 2_000)
+alignment_kwargs = {max_non_rigid_registration_dim_px=1_000, max_processed_image_dim_px=500, check_for_reflections=true}
+save_full_slide = true # Run the alignment on lower resolution images first to determine if alignment is good
+transformation = "both" # Options: "rigid", "non-rigid", "both"
+overwrite = false
+
+# We define the configuration for each image to be aligned
+[[image]]
+path = "path/to/image.ome.tiff"
+# If an image is the target, all other images will be aligned towards it
+target_image = true
+# SpatialData element name to assign the image
+spatialdata_element_name = ["target_image"]
+
+# We can also define a configuration for an image that contains multitple sections/regions of interest
+# Each of these will be segmented, cropped, and registered independently.
+[[image]]
+path = "path/to/image_with_multiple_rois.ome.tiff"
+# Crop mask information
+mask_ids = ["S8", "S12", "S17", "S23", "S38", "S43"] # Identify all ROIs in the histology image
+mask_to_align = ["S23"] # We can choose to align any number of the ROIs 
+source_image_mask_order_method = "left_right" # How the sections are ordered. Supported: "left_right", "right_left", "top_bottom", "bottom_top"
+source_image_mask_downsample_scale = [1, 32, 32] # C Y X. Scaled down images are faster to process masks for
+masking_kwargs = {manual_threshold = 20} # Kwargs to pass to tissue_detection segmentation function
+spatialdata_element_name = ["aligned_S23"]
+# Path to a directory of polygon yaml files. These will be loaded using GeoPandas and aligned.
+histology_annotations = "/polygon/dir"
+
+# Define any number of images to align
+[[image]]
+path = "path/to/image_with_multiple_rois2.ome.tiff"
+mask_ids = ["S21", "S24"]
+mask_to_align = ["S24"] 
+source_image_mask_order_method = "left_right"
+source_image_mask_downsample_scale = [1, 32, 32]
+masking_kwargs = {manual_threshold = 20}
+spatialdata_element_name = ["aligned_S24"]
+histology_annotations = "/polygon2/dir"
