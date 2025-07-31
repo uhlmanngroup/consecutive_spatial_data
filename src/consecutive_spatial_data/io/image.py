@@ -23,10 +23,10 @@ from spatialdata.transformations.transformations import Identity
 
 from .write import MultiscaleImageWriter
 from .omero_annotations import yaml_to_polygon
-from ..registration import ValisAlignment  # Fixed import
-from ..segmentation import tissue_detection  # Fixed import
+from ..registration import ValisAlignment
+from ..segmentation import tissue_detection
 from ..spec import Constants, Opts, Xenium
-from ..utility.utils import (  # Fixed import
+from ..utility.utils import (
     _strip_ome_tiff,
     get_spatial_element,
     reorder_array,
