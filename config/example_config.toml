@@ -32,8 +32,11 @@ source_image_mask_order_method = "left_right" # How the sections are ordered. Su
 source_image_mask_downsample_scale = [1, 32, 32] # C Y X. Scaled down images are faster to process masks for
 masking_kwargs = {manual_threshold = 20} # Kwargs to pass to tissue_detection segmentation function
 spatialdata_element_name = ["aligned_S23"]
-# Path to a directory of polygon yaml files. These will be loaded using GeoPandas and aligned.
-histology_annotations = "/polygon/dir"
+# Path to annotation source. Can be:
+# 1. Directory of polygon yaml files: "/polygon/dir"
+# 2. Parquet file with geodataframe: "/path/to/annotations.parquet"
+# 3. SpatialData shapes key: "spatialdata:/path/to/data.zarr:shapes_key_name"
+annotations = "/polygon/dir"
 
 # Define any number of images to align
 [[image]]
@@ -44,4 +47,22 @@ source_image_mask_order_method = "left_right"
 source_image_mask_downsample_scale = [1, 32, 32]
 masking_kwargs = {manual_threshold = 20}
 spatialdata_element_name = ["aligned_S24"]
-histology_annotations = "/polygon2/dir"
+# Example using parquet file
+annotations = "/path/to/annotations.parquet"
+
+# Example showing different annotation sources for different images:
+# annotations = "spatialdata:/path/to/spatial_data.zarr:cell_boundaries"
+
+# Example using SpatialData image source format
+[[image]]
+# SpatialData image source format: "spatialdata:/path/to/file.zarr:image_key_name"
+path = "spatialdata:/path/to/spatial_data.zarr:morphology_focus"
+target_image = true
+spatialdata_element_name = ["target_spatial_image"]
+# Since this is a SpatialData object, no masking is needed - each object is already a single image
+
+# You can also load from a regular .zarr file (this will use the default image key)
+[[image]]
+path = "/path/to/spatial_data.zarr"
+target_image = false
+spatialdata_element_name = ["source_spatial_image"]

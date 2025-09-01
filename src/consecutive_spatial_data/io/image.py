@@ -56,7 +56,7 @@ class ImageAlign:
             source_image_mask_downsample_scale (typing.Tuple[int], optional): _description_. Defaults to None.
             mask_to_align (str | list[str] | None, optional): _description_. Defaults to None.
             source_image_mask_order_method (typing.Literal[], optional): _description_. Defaults to "left_right".
-            histology_annotations (dict[str, str] | None, optional): _description_. Defaults to None.
+            annotations (dict[str, str] | None, optional): _description_. Defaults to None.
             masking_kwargs (dict, optional): _description_. Defaults to {}.
             dimensions (_type_, optional): _description_. Defaults to {"c": 0, "x": 1, "y": 2}.
         """
@@ -96,12 +96,13 @@ class ImageAlign:
             assert (
                 "path" in img_info.keys()
             ), f"Image dict does not possess 'path' key, which is required: {img_info}"
-            if img_info["path"].endswith(".zarr") and (
+            if (img_info["path"].endswith(".zarr") or img_info["path"].startswith("spatialdata:")) and (
                 "mask_ids" in img_info.keys() or "mask_to_align" in img_info.keys()
             ):
                 raise ValueError(
                     "Found mask information for a spatial data object, which is not supported."
                 )
+            if img_info["path"].endswith(".zarr") or img_info["path"].startswith("spatialdata:"):
                 if img_info.get("spatialdata_element_name", None) is not None:
                     assert isinstance(
                         img_info["spatialdata_element_name"], list
@@ -208,7 +209,7 @@ class ImageAlign:
                     "source_image_mask_order_method"
                 )
                 mask_ids = img_info.get("mask_ids")
-                histology_annotations = img_info.get("histology_annotations", None)
+                annotations = img_info.get("annotations", None)
 
                 # If ome.tiff, calculate masks
                 if img_path.endswith(tuple(Constants.image_file_extensions)):
@@ -307,19 +308,17 @@ class ImageAlign:
                             f"Saving mask crop {mta} with shape {cropped_image.shape} to {save_path}"
                         )
 
-                        if histology_annotations is not None and os.path.exists(
-                            histology_annotations
-                        ):
+                        if annotations is not None:
                             # Load the annotations that are found in this mask ROI
-                            annotations = self._get_omero_annotations(
-                                histology_annotations, y_slice, x_slice
+                            loaded_annotations = self._get_annotations(
+                                annotations, y_slice, x_slice
                             )
 
-                            if len(annotations) > 0:
+                            if len(loaded_annotations) > 0:
                                 # Cache the annotations, since calculating the masks
                                 # is computationally intensive and we need the masks for subsetting.
-                                annotations.to_file(save_path.with_suffix(".geojson"))
-                                self.annotations[save_path] = annotations
+                                loaded_annotations.to_file(save_path.with_suffix(".geojson"))
+                                self.annotations[save_path] = loaded_annotations
                             else:
                                 log.warning(
                                     f"No annotations found to be associated with {save_path.name}"
@@ -423,10 +422,28 @@ class ImageAlign:
 
         return tables
 
+    def _get_annotations(
+        self, annotation_source: str, y_slice: slice, x_slice: slice
+    ):
+        """Load annotations from various sources: yaml directory, parquet file, or SpatialData shapes key."""
+        
+        if os.path.isdir(annotation_source):
+            # Directory of YAML files (original behavior)
+            return self._get_omero_annotations(annotation_source, y_slice, x_slice)
+        elif annotation_source.endswith('.parquet'):
+            # Parquet file containing geodataframe
+            return self._get_parquet_annotations(annotation_source, y_slice, x_slice)
+        elif annotation_source.startswith('spatialdata:'):
+            # SpatialData shapes key format: "spatialdata:path/to/file.zarr:shapes_key"
+            return self._get_spatialdata_annotations(annotation_source, y_slice, x_slice)
+        else:
+            raise ValueError(f"Unsupported annotation source format: {annotation_source}")
+
     def _get_omero_annotations(
         self, annotation_path: str, y_slice: slice, x_slice: slice
     ):
-
+        """Load annotations from directory of YAML files (original implementation)."""
+        
         polygons = {
             "geometry": [],
             Constants.PolygonID: [],
@@ -449,16 +466,82 @@ class ImageAlign:
 
         return polygons
 
+    def _get_parquet_annotations(
+        self, parquet_path: str, y_slice: slice, x_slice: slice
+    ):
+        """Load annotations from a parquet file containing a geodataframe."""
+        
+        if not os.path.exists(parquet_path):
+            raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+            
+        polygons = geopandas.read_parquet(parquet_path)
+        
+        # Ensure it has a geometry column
+        if 'geometry' not in polygons.columns:
+            raise ValueError(f"Parquet file must contain a 'geometry' column: {parquet_path}")
+        
+        polygons = _subset_polygons(polygons, y_slice, x_slice, reset_origin=True)
+
+        return polygons
+
+    def _get_spatialdata_annotations(
+        self, spatialdata_source: str, y_slice: slice, x_slice: slice
+    ):
+        """Load annotations from a SpatialData shapes key."""
+        
+        # Parse the spatialdata source format: "spatialdata:path/to/file.zarr:shapes_key"
+        parts = spatialdata_source.split(':', 2)
+        if len(parts) != 3 or parts[0] != 'spatialdata':
+            raise ValueError(f"Invalid SpatialData source format. Expected 'spatialdata:path/to/file.zarr:shapes_key', got: {spatialdata_source}")
+        
+        _, sdata_path, shapes_key = parts
+        
+        if not os.path.exists(sdata_path):
+            raise FileNotFoundError(f"SpatialData file not found: {sdata_path}")
+        
+        sdata = spatialdata.read_zarr(sdata_path, selection=["shapes"])
+        
+        if shapes_key not in sdata.shapes:
+            available_keys = list(sdata.shapes.keys())
+            raise KeyError(f"Shapes key '{shapes_key}' not found in SpatialData. Available keys: {available_keys}")
+        
+        polygons = sdata.shapes[shapes_key]
+        
+        # Convert to regular GeoDataFrame if it's not already
+        if not isinstance(polygons, geopandas.GeoDataFrame):
+            polygons = geopandas.GeoDataFrame(polygons)
+        
+        polygons = _subset_polygons(polygons, y_slice, x_slice, reset_origin=True)
+
+        return polygons
+
+    def _parse_spatialdata_path(self, spatialdata_source: str):
+        """Parse spatialdata: format path and return sdata_path and key."""
+        parts = spatialdata_source.split(':', 2)
+        if len(parts) != 3 or parts[0] != 'spatialdata':
+            raise ValueError(f"Invalid SpatialData source format. Expected 'spatialdata:path/to/file.zarr:key', got: {spatialdata_source}")
+        
+        _, sdata_path, key = parts
+        return sdata_path, key
+
     def _get_spatial_images(self):
         """Save spatial images to disk for registration"""
         for img_info in tqdm(self.source_images):
             img_path = img_info.get("path")
             save_name = img_info.get("spatialdata_element_name", None)[0]
-            if img_path.endswith(".zarr"):
-                img_path = pathlib.Path(img_path)
+            if img_path.endswith(".zarr") or img_path.startswith("spatialdata:"):
+                
+                # Handle spatialdata: format
+                if img_path.startswith("spatialdata:"):
+                    sdata_path, image_key = self._parse_spatialdata_path(img_path)
+                    actual_img_path = pathlib.Path(sdata_path)
+                else:
+                    actual_img_path = pathlib.Path(img_path)
+                    image_key = Constants.images_morphology_focus  # Default key
+                
                 if save_name is None:
                     save_name = (
-                        img_path.stem + "_" + Constants.spatial_image_save_filename,
+                        actual_img_path.stem + "_" + Constants.spatial_image_save_filename,
                     )
                 save_path = pathlib.Path(
                     self.cache, save_name + Constants.image_extension
@@ -466,7 +549,7 @@ class ImageAlign:
 
                 if img_info.get("target_image", False):
                     self.target_image_path = str(save_path)
-                    self.target_sdata_path = img_path
+                    self.target_sdata_path = actual_img_path
                 self.processed_source_images.append(str(save_path))
 
                 # Use the cache, if present
@@ -476,23 +559,23 @@ class ImageAlign:
                     )
                     save_path.parent.mkdir(parents=True, exist_ok=True)
                     sdata = spatialdata.read_zarr(
-                        img_path,
+                        actual_img_path,
                         selection=["images"],
                     )
-                    # Get the multiscale spatial image
+                    # Get the multiscale spatial image using specified or default key
                     image = get_spatial_element(
                         sdata.images,
-                        Constants.images_morphology_focus,
+                        image_key,
                         as_spatial_image=True,
                     )
                     log.info(f"Saving spatial image for registration at {save_path}")
                     _ = _save_image(image, save_path)
 
                 # Get the shapes and points associated with this spatialdata object
-                annotations = self._get_spatial_annotations(img_path)
+                annotations = self._get_spatial_annotations(actual_img_path)
                 self.annotations[save_path] = annotations
 
-                table = self._get_spatial_table(img_path)
+                table = self._get_spatial_table(actual_img_path)
                 self.tables[save_path] = table
 
     def _associate_annotations_with_masks(self):
