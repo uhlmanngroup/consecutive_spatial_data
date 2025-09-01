@@ -365,7 +365,7 @@ class ImageAlign:
         # Update the SpatialData transform to identity.
         # When reading Xenium polygons, spatialdata_io adds a micron -> scale transform.
         # We are removing this transform here.
-        set_transformation(sdata[Constants.shapes_cell_boundaries], Identity())
+        set_transformation(sdata[shapes_key], Identity())
 
         # spatial_annotations = {}
 
