@@ -341,7 +341,7 @@ class ImageAlign:
                                 f"No annotations found to be associated with {save_path.name}"
                             )
 
-    def _get_spatial_annotations(self, sdata_path):
+    def _get_spatial_annotations(self, sdata_path, shapes_key=None):
         """Load GeoDataFrames from any spatial experiments.
         Extend any existing annotations"""
 
@@ -349,8 +349,10 @@ class ImageAlign:
             sdata_path,
             selection=["shapes"],
         )
+        # Use specified shapes key or fall back to default
+        shapes_key = shapes_key or Constants.shapes_cell_boundaries
         spatial_annotations = get_spatial_element(
-            sdata.shapes, Constants.shapes_cell_boundaries
+            sdata.shapes, shapes_key
         )
 
         # Convert spatial coords from micron scale to pixel scale
@@ -572,7 +574,18 @@ class ImageAlign:
                     _ = _save_image(image, save_path)
 
                 # Get the shapes and points associated with this spatialdata object
-                annotations = self._get_spatial_annotations(actual_img_path)
+                # Check if annotations field specifies a custom shapes key
+                shapes_key = None
+                if img_info.get("annotations") and img_info["annotations"].startswith("spatialdata:"):
+                    try:
+                        annotation_sdata_path, annotation_shapes_key = self._parse_spatialdata_path(img_info["annotations"])
+                        # Only use the shapes key if it's from the same SpatialData file
+                        if pathlib.Path(annotation_sdata_path) == actual_img_path:
+                            shapes_key = annotation_shapes_key
+                    except ValueError:
+                        log.warning(f"Invalid spatialdata annotation format for image {img_path}, using default shapes key")
+                
+                annotations = self._get_spatial_annotations(actual_img_path, shapes_key)
                 self.annotations[save_path] = annotations
 
                 table = self._get_spatial_table(actual_img_path)

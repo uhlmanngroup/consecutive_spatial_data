@@ -57,6 +57,8 @@ annotations = "/path/to/annotations.parquet"
 [[image]]
 # SpatialData image source format: "spatialdata:/path/to/file.zarr:image_key_name"
 path = "spatialdata:/path/to/spatial_data.zarr:morphology_focus"
+# Specify which shapes key to use from the same SpatialData file (optional - defaults to cell_boundaries)
+annotations = "spatialdata:/path/to/spatial_data.zarr:custom_shapes_key"
 target_image = true
 spatialdata_element_name = ["target_spatial_image"]
 # Since this is a SpatialData object, no masking is needed - each object is already a single image
@@ -66,3 +68,10 @@ spatialdata_element_name = ["target_spatial_image"]
 path = "/path/to/spatial_data.zarr"
 target_image = false
 spatialdata_element_name = ["source_spatial_image"]
+
+# Example: Load image from one SpatialData file and shapes from another
+[[image]]
+path = "spatialdata:/path/to/image_data.zarr:histology_image"
+annotations = "spatialdata:/path/to/annotation_data.zarr:manual_annotations"
+target_image = false
+spatialdata_element_name = ["mixed_source_image"]
