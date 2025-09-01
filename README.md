@@ -18,13 +18,14 @@
 
 - **Annotation Polygon Support**  
   - Align polygonal annotations (e.g., from Omero) to spatial transcriptomics data.
+  - Align segmentations from other experiments (eg. align visium bins to xenium segmentations)
 
 - **Flexible Registration Options**  
-  - Uses [Valis](https://github.com/choosehappy/valis) for both rigid and non-rigid image registration.  
+  - Performs both rigid and non-rigid image registration.  
   - Outputs are saved directly to a SpatialData object.
 
 - **Modular Backend Design**  
-  - While Valis is the default backend, alternative registration methods can be integrated by implementing a `process()` method in a compatible class.
+  - While [Valis](https://github.com/MathOnco/valis) is the default backend, alternative registration methods can be integrated by implementing a `process()` method in a compatible class.
 
 ## Getting Started
 
