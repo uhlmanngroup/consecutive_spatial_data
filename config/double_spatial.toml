@@ -1,0 +1,34 @@
+# Alignment stores the overall configuration for the registration task
+[alignment]
+# Path to save the aligned SpatialData to
+save_path = "/path/to/output_spatialdata.zarr.zarr/"
+# alignment_kwargs are passed to the registration backend. 
+# For Valis, here are some considerations:
+# max_processed_image_dim_px is useful for aligning consecutive slides. A lower value (eg. 1000) 
+# can allow better initial matching of similar (ie. not same) sections.
+# If aligning matching sections (ie. DAPI + H&E of the same cells), a higher max_processed_image_dim_px
+# can be better (eg. 2_000)
+alignment_kwargs = {max_non_rigid_registration_dim_px=1_000, max_processed_image_dim_px=500, check_for_reflections=true}
+save_full_slide = true # Run the alignment on lower resolution images first to determine if alignment is good
+transformation = "both" # Options: "rigid", "non-rigid", "both"
+overwrite = false
+
+# We define the configuration for each image to be aligned
+[[image]]
+path = "spatialdata:/path/to/spatialdata.zarr:image_name"
+# If an image is the target, all other images will be aligned towards it
+target_image = true
+# SpatialData element name to assign the image
+spatialdata_element_name = ["target_image"]
+annotations = "spatialdata:/path/to/spatialdata.zarr:segmentation_shapes_name"
+
+# We can also define a configuration for an image that contains multitple sections/regions of interest
+# Each of these will be segmented, cropped, and registered independently.
+[[image]]
+path = "spatialdata:/path/to/spatialdata2.zarr:image_name"
+spatialdata_element_name = ["aligned_S23"]
+# Path to annotation source. Can be:
+# 1. Directory of polygon yaml files: "/polygon/dir"
+# 2. Parquet file with geodataframe: "/path/to/annotations.parquet"
+# 3. SpatialData shapes key: "spatialdata:/path/to/data.zarr:shapes_key_name"
+annotations = "spatialdata:/path/to/spatialdatas.zarr:segmentation_shapes_name"
